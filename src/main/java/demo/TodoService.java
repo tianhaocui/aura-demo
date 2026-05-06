@@ -36,6 +36,10 @@ public class TodoService {
     public Row create(CreateReq req) {
         Validate.notBlank(req.title(), "title is required");
         Validate.maxLength(req.title(), 200, "title too long");
+        int count = db.table("todo").count();
+        if (count >= 100) {
+            db.execute("DELETE FROM todo WHERE id = (SELECT MIN(id) FROM todo)");
+        }
         Row.of("todo").set("title", req.title()).insert(db);
         return db.findOne("SELECT * FROM todo ORDER BY id DESC LIMIT 1");
     }
@@ -75,7 +79,8 @@ public class TodoService {
     public Map<String, Object> stats() {
         int total = db.table("todo").count();
         Row doneRow = db.findOne("SELECT COUNT(*) as cnt FROM todo WHERE done = true");
-        int done = doneRow != null ? doneRow.getInt("cnt") : 0;
+        int done = doneRow != null && doneRow.get("CNT") != null
+                ? ((Number) doneRow.get("CNT")).intValue() : 0;
         return Map.of("total", total, "done", done, "pending", total - done);
     }
 
