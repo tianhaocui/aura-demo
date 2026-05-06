@@ -16,7 +16,7 @@ public class App {
             )""");
 
         Aura.create()
-            .port(8080)
+            .port(7291)
             .cors(true)
             .onStart(a -> a.register(db))
             .onStop(a -> db.close())
