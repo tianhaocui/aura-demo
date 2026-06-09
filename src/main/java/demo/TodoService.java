@@ -27,9 +27,18 @@ public class TodoService {
         return todo;
     }
 
-    @Desc("List all todos")
+    @Desc("List all todos, optionally filtered")
     public List<Row> list() {
         return db.table("todo").orderBy("created_at DESC").find();
+    }
+
+    @Get("/page")
+    @Desc("Paginate todos")
+    public Page<Row> page(int pageNum, int pageSize) {
+        if (pageNum < 1) pageNum = 1;
+        if (pageSize < 1 || pageSize > 50) pageSize = 10;
+        return db.paginate("SELECT * FROM todo ORDER BY created_at DESC",
+                new Object[0], pageNum, pageSize);
     }
 
     @Desc("Create a new todo")
@@ -40,8 +49,8 @@ public class TodoService {
         if (count >= 100) {
             db.execute("DELETE FROM todo WHERE id = (SELECT MIN(id) FROM todo)");
         }
-        Row.of("todo").set("title", req.title()).insert(db);
-        return db.findOne("SELECT * FROM todo ORDER BY id DESC LIMIT 1");
+        Row row = Row.of("todo").set("title", req.title()).insert(db);
+        return db.findById("todo", row.id());
     }
 
     @Put("/{id}")
@@ -55,8 +64,7 @@ public class TodoService {
         if (req.done() != null) {
             todo.set("done", req.done());
         }
-        db.execute("UPDATE todo SET title = ?, done = ? WHERE id = ?",
-                todo.getStr("title"), todo.get("done"), id);
+        db.table("todo").where("id", id).update(todo);
         return get(id);
     }
 
@@ -67,11 +75,13 @@ public class TodoService {
     }
 
     @Get("/search")
-    @Desc("Search todos by keyword")
-    public List<Row> search(String keyword) {
-        if (keyword == null || keyword.isBlank()) return list();
-        return db.find("SELECT * FROM todo WHERE title LIKE ? ORDER BY created_at DESC",
-                "%" + keyword + "%");
+    @Desc("Search todos by keyword and done status")
+    public List<Row> search(String keyword, Boolean done) {
+        String sql = "SELECT * FROM todo #where(title, 'LIKE', keyword) #and(done, '=', done) #orderBy(created_at DESC)";
+        Map<String, Object> params = new java.util.HashMap<>();
+        if (keyword != null && !keyword.isBlank()) params.put("keyword", "%" + keyword + "%");
+        if (done != null) params.put("done", done);
+        return db.findDynamic(sql, params);
     }
 
     @Get("/stats")
@@ -79,8 +89,8 @@ public class TodoService {
     public Map<String, Object> stats() {
         int total = db.table("todo").count();
         Row doneRow = db.findOne("SELECT COUNT(*) as cnt FROM todo WHERE done = true");
-        int done = doneRow != null && doneRow.get("CNT") != null
-                ? ((Number) doneRow.get("CNT")).intValue() : 0;
+        int done = doneRow != null && doneRow.get("cnt") != null
+                ? ((Number) doneRow.get("cnt")).intValue() : 0;
         return Map.of("total", total, "done", done, "pending", total - done);
     }
 

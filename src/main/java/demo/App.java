@@ -1,7 +1,10 @@
 package demo;
 
 import io.aura.Aura;
+import io.aura.Validate;
 import io.aura.db.Db;
+
+import java.util.Map;
 
 public class App {
     public static void main(String[] args) {
@@ -18,9 +21,16 @@ public class App {
         Aura.create()
             .port(7291)
             .cors(true)
+            .accessLog(true)
             .onStart(a -> a.register(db))
             .onStop(a -> db.close())
             .service(new TodoService(db))
+            .routes(r -> {
+                r.exception(TodoService.NotFoundException.class,
+                    (e, ctx) -> ctx.status(404).json(Map.of("error", e.getMessage())));
+                r.exception(Validate.ValidationException.class,
+                    (e, ctx) -> ctx.status(400).json(Map.of("error", e.getMessage())));
+            })
             .start(args);
     }
 }
